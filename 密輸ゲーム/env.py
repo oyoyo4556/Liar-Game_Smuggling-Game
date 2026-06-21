@@ -59,9 +59,9 @@ class BatchsmugglingGame:
         elif self.game.phase == Phase.INSPECT:
             self.step_inspect(actions)
         elif self.game.phase == Phase.DISTRIBUTE:
-            self.step_distribute(actions)
+            self.step_distribute()
         elif self.game.phase == Phase.PUBLIC_UPDATE:
-            self.step_public_update(actions)
+            self.step_public_update()
         
         # ----------------------------------------
         # 共通の return 処理
@@ -214,7 +214,7 @@ class BatchsmugglingGame:
         self.game.phase = Phase.DISTRIBUTE
 
 
-    def step_distribute(self, actions=None):
+    def step_distribute(self):
         """
         分配フェーズのアクション処理（自動山分けルール）。
         ※自動処理のため、actionsの中身は無視(またはNoneでOK)します。
@@ -236,7 +236,7 @@ class BatchsmugglingGame:
         self.game.phase = Phase.PUBLIC_UPDATE
 
     
-    def step_public_update(self,actions=None):
+    def step_public_update(self):
         '''
         履歴更新 -> round += 1 -> phase = VOTE
         -> legal_action_mask更新してstateを出す
