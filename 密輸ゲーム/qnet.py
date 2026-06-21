@@ -59,3 +59,69 @@ class VoteQNet(nn.Module):
         q = torch.where(mask == 1, q, torch.tensor(-1e9, device=q.device))
 
         return q
+
+class SumggelQNet(nn.Module):
+    def __init__(self, state_dim, hidden_dim, action_dim):
+        super().__init__()
+        self.input_layer = nn.Linear(state_dim, hidden_dim)
+        self.res1 = ResidualBlock(hidden_dim)
+        self.res2 = ResidualBlock(hidden_dim)
+        self.final_ln = nn.LayerNorm(hidden_dim)
+        
+        self.value = nn.Linear(hidden_dim, 1)
+        self.advantage = nn.Linear(hidden_dim, action_dim)
+
+    def forward(self, x, mask):
+        
+        x = self.input_layer(x)
+        x = F.relu(x)
+        x = self.res1(x)
+        x = F.relu(x)
+        x = self.res2(x)
+        x = self.final_ln(x)
+
+        value = self.value(x)          
+        advantage = self.advantage(x)  
+
+        masked_advantage = advantage * mask
+        legal_counts = torch.clamp(mask.sum(dim=-1, keepdim=True), min=1.0)
+        
+        adv_mean = masked_advantage.sum(dim=-1, keepdim=True) / legal_counts
+        
+        q = value + (masked_advantage - adv_mean)
+        q = torch.where(mask == 1, q, torch.tensor(-1e9, device=q.device))
+
+        return q
+
+class InspectQNet(nn.Module):
+    def __init__(self, state_dim, hidden_dim, action_dim):
+        super().__init__()
+        self.input_layer = nn.Linear(state_dim, hidden_dim)
+        self.res1 = ResidualBlock(hidden_dim)
+        self.res2 = ResidualBlock(hidden_dim)
+        self.final_ln = nn.LayerNorm(hidden_dim)
+        
+        self.value = nn.Linear(hidden_dim, 1)
+        self.advantage = nn.Linear(hidden_dim, action_dim)
+
+    def forward(self, x, mask):
+        
+        x = self.input_layer(x)
+        x = F.relu(x)
+        x = self.res1(x)
+        x = F.relu(x)
+        x = self.res2(x)
+        x = self.final_ln(x)
+
+        value = self.value(x)          
+        advantage = self.advantage(x)  
+
+        masked_advantage = advantage * mask
+        legal_counts = torch.clamp(mask.sum(dim=-1, keepdim=True), min=1.0)
+        
+        adv_mean = masked_advantage.sum(dim=-1, keepdim=True) / legal_counts
+        
+        q = value + (masked_advantage - adv_mean)
+        q = torch.where(mask == 1, q, torch.tensor(-1e9, device=q.device))
+
+        return q
