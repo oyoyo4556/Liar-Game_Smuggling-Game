@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-class Proseccor:
+class Processor:
     def __init__(self):
         pass
 
@@ -32,7 +32,7 @@ class Proseccor:
         obs_components.append(torch.tensor([declared_normalized], dtype=torch.float32))
     
         # 自分がこのラウンドの代表者（密輸側、または検査側）かどうかのフラグ
-        is_representative = 1.0 if (player_id == game.smugler.representative or player_id == game.inspector.representative) else 0.0
+        is_representative = 1.0 if (player_id == game.smuggler.representative or player_id == game.inspector.representative) else 0.0
         obs_components.append(torch.tensor([is_representative], dtype=torch.float32))
 
         # 5. プレイヤー全員の個人口座残高 (6次元)

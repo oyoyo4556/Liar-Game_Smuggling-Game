@@ -58,10 +58,12 @@ class BatchsmugglingGame:
             self.step_smuggle(actions)
         elif self.game.phase == Phase.INSPECT:
             self.step_inspect(actions)
-        elif self.game.phase == Phase.DISTRIBUTE:
-            self.step_distribute()
-        elif self.game.phase == Phase.PUBLIC_UPDATE:
-            self.step_public_update()
+        
+        while self.game.phase in [Phase.DISTRIBUTE, Phase.PUBLIC_UPDATE]:
+            if self.game.phase == Phase.DISTRIBUTE:
+                self.step_distribute()
+            elif self.game.phase == Phase.PUBLIC_UPDATE:
+                self.step_public_update()
         
         # ----------------------------------------
         # 共通の return 処理
@@ -132,30 +134,25 @@ class BatchsmugglingGame:
         """
         rep_id = self.game.smuggler.representative
 
-        # 1. 代表者のアクション（インデックス）を取得
         if rep_id in actions:
-            actual_idx, declared_idx = actions[rep_id]
+            
+            act_idx = actions[rep_id][0]
+            dec_idx = actions[rep_id][1]
         else:
-            actual_idx, declared_idx = 0, 0
+            act_idx, dec_idx = 0, 0
 
-        # 2. 【重要】インデックスを実際の「金額」にデコード（* 10）
-        # ※ [11:22] の申告額マスクから 11〜21 のインデックスがそのまま降ってくる場合は、
-        # ここで「declared_idx - 11」のように補正する。
-        # ここでは純粋な 0〜10 が降ってくる前提になってます。
-        actual_amount = actual_idx * 10
-        declared_amount = declared_idx * 10
+        # 金額への変換（Numpyの整数型のまま10倍して代入可能）
+        actual_amount = act_idx * 10
+        declared_amount = dec_idx * 10
 
-        # 3. 状態の更新（国外口座からの引き落とし）
+        # 状態更新
         if self.game.smuggler.team == 0:
             self.game.foreign1_account -= actual_amount
         else:
             self.game.foreign2_account -= actual_amount
 
-        # ラウンド情報に金額を記録
         self.game.current.smuggled_amount = actual_amount
         self.game.current.declared_amount = declared_amount
-
-        # 4. 検査（INSPECT）フェーズへ移行
         self.game.phase = Phase.INSPECT
 
 
@@ -181,7 +178,7 @@ class BatchsmugglingGame:
             # インデックス 1->0万, 2->10万, ..., 11->100万 にデコード
             doubt_amount = (action_idx - 1) * 10
 
-        # 3. 判定ロジック（ここから下は金額ベースなので、前のロジックそのままでOK）
+        # 3. 判定ロジック
         actual_amount = self.game.current.smuggled_amount
         declared_amount = self.game.current.declared_amount
 
@@ -199,7 +196,7 @@ class BatchsmugglingGame:
             
             compensation = doubt_amount // 2
 
-            if actual_amount <= doubt_amount:
+            if actual_amount <= doubt_amount and actual_amount != 0:
                 # 【検査官の勝ち】
                 self.game.current.success = False
                 self.game.current.gain_amount = actual_amount 
@@ -208,6 +205,7 @@ class BatchsmugglingGame:
                 # 【密輸側の勝ち】
                 self.game.current.success = True
                 self.game.current.gain_amount = actual_amount + compensation
+                self.game.players[rep_id].personal_account -= compensation
                 self.game.current.stolen_amount = -compensation
 
         # 分配（DISTRIBUTE）フェーズへ移行
@@ -295,24 +293,28 @@ class BatchsmugglingGame:
             if player_id != self.game.smuggler.representative:
                 return np.zeros(22, dtype=np.int32) # 手番外はすべて不可
 
-            mask = np.zeros(22, dtype=np.int32)
+            # 実際額(11択) と 申告額(11択) のマスクをそれぞれ個別に用意
+            actual_mask = np.zeros(11, dtype=np.int32)
+            declared_mask = np.zeros(11, dtype=np.int32)
             
             # 密輸側の国の残高を取得
             current_foreign_account = (
                 self.game.foreign1_account if self.game.smuggler.team == 0 
                 else self.game.foreign2_account
-            )
+            ) #
 
-            # [0:11] は実際の密輸額（actual_amount）のマスク
+            # ① 実際の密輸額（actual_amount）のマスク計算 (0〜10)
             for act_idx in range(11):
-                amount = act_idx * 10
+                amount = act_idx * 10 
                 # 国外口座の残高を超えない額なら密輸可能
-                if amount <= current_foreign_account:
-                    mask[act_idx] = 1
+                if amount <= current_foreign_account: 
+                    actual_mask[act_idx] = 1
 
-            # [11:22] は申告額（declared_amount）のマスク
-            mask[11:22] = 1
-            return mask
+            # ② 申告額（declared_amount）のマスク計算 (0〜10)
+            declared_mask[:] = 1
+
+            # 2つのマスクを結合して22次元の1次元配列にして返す
+            return np.concatenate([actual_mask, declared_mask])
 
         # ----------------------------------------
         # 3. INSPECT（検査）フェーズ: マスクサイズ = 12 (パス1択 + ダウト額11択)
@@ -348,9 +350,31 @@ class BatchsmugglingGame:
             # 意思決定がないフェーズは空のマスクを返す
             return np.array([], dtype=np.int32)
 
+def exact_calculate(self):
+        """
+        ゲーム終了時の最終清算ロジック
+        """
+        # 1. 国外口座の残高を相手チームに山分け
+        # チーム0の国外口座の残り（foreign1_account）は、チーム1のメンバーで山分け
+        team0_members = [p.id for p in self.game.players if p.team == 0]
+        team1_members = [p.id for p in self.game.players if p.team == 1]
 
-    
+        if len(team1_members) > 0:
+            share_from_foreign1 = self.game.foreign1_account // len(team1_members)
+            for p_id in team1_members:
+                self.game.players[p_id].personal_account += share_from_foreign1
+        
+        # チーム1の国外口座の残り（foreign2_account）は、チーム0のメンバーで山分け
+        if len(team0_members) > 0:
+            share_from_foreign2 = self.game.foreign2_account // len(team0_members)
+            for p_id in team0_members:
+                self.game.players[p_id].personal_account += share_from_foreign2
 
-    def exact_caluculate(self):
+        # 2. 口座残高を0にクリア（任意：状態の記録用）
+        self.game.foreign1_account = 0
+        self.game.foreign2_account = 0
+
+        # 3. 借金の返済
         for i in range(len(self.game.players)):
             self.game.players[i].personal_account -= 400
+    
