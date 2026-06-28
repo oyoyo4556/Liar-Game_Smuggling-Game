@@ -61,7 +61,7 @@ class VoteQNet(nn.Module):
         return q
 
 class SmuggleQNet(nn.Module):
-    def __init__(self, state_dim, hidden_dim):
+    def __init__(self, state_dim, hidden_dim,action_dim=121):
         super().__init__()
         self.input_layer = nn.Linear(state_dim, hidden_dim)
         self.res1 = ResidualBlock(hidden_dim)
@@ -71,9 +71,7 @@ class SmuggleQNet(nn.Module):
         # 状態価値Vは共通
         self.value = nn.Linear(hidden_dim, 1)
         
-        # 【修正】アドバンテージのヘッドを2つに分ける（各11択）
-        self.advantage_actual = nn.Linear(hidden_dim, 11)
-        self.advantage_declared = nn.Linear(hidden_dim, 11)
+        self.advantage = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, x, mask):
         # x: [batch_size, state_dim]
@@ -87,28 +85,15 @@ class SmuggleQNet(nn.Module):
         x = self.final_ln(x)
 
         value = self.value(x)  # [batch_size, 1]
+        adv = self.advantage(x)
         
-        mask_actual = mask[:, :11]
-        mask_declared = mask[:, 11:]
-
-        # --- ① 実際額（Actual）のQ値計算 ---
-        adv_act = self.advantage_actual(x)
-        masked_adv_act = adv_act * mask_actual
-        counts_act = torch.clamp(mask_actual.sum(dim=-1, keepdim=True), min=1.0)
-        mean_act = masked_adv_act.sum(dim=-1, keepdim=True) / counts_act
-        q_actual = value + (masked_adv_act - mean_act)
-        q_actual = torch.where(mask_actual == 1, q_actual, torch.tensor(-1e9, device=q_actual.device))
-
-        # --- ② 申告額（Declared）のQ値計算 ---
-        adv_dec = self.advantage_declared(x)
-        masked_adv_dec = adv_dec * mask_declared
-        counts_dec = torch.clamp(mask_declared.sum(dim=-1, keepdim=True), min=1.0)
-        mean_dec = masked_adv_dec.sum(dim=-1, keepdim=True) / counts_dec
-        q_declared = value + (masked_adv_dec - mean_dec)
-        q_declared = torch.where(mask_declared == 1, q_declared, torch.tensor(-1e9, device=q_declared.device))
-
-        # 2つのQ値をタプルで返す
-        return q_actual, q_declared
+        masked_adv = adv * mask
+        counts = torch.clamp(mask.sum(dim=-1, keepdim=True), min=1.0)
+        mean = masked_adv.sum(dim=-1, keepdim=True) / counts
+        q_values = value + (masked_adv - mean)
+        
+        q_values = torch.where(mask == 1, q_values, torch.tensor(-1e9, device=q_values.device))
+        return q_values
 
 class InspectQNet(nn.Module):
     def __init__(self, state_dim, hidden_dim, action_dim):

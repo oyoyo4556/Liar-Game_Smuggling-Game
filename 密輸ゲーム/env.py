@@ -287,34 +287,34 @@ class BatchsmugglingGame:
             return mask
 
         # ----------------------------------------
-        # 2. SMUGGLE（密輸）フェーズ: マスクサイズ = 22 (実際の額11択 + 申告額11択)
+        # 2. SMUGGLE（密輸）フェーズ: マスクサイズ = 121 (実際11択 × 申告11択)
         # ----------------------------------------
         elif phase == Phase.SMUGGLE:
             if player_id != self.game.smuggler.representative:
-                return np.zeros(22, dtype=np.int32) # 手番外はすべて不可
+                return np.zeros(121, dtype=np.int32) # 手番外はすべて不可
 
-            # 実際額(11択) と 申告額(11択) のマスクをそれぞれ個別に用意
-            actual_mask = np.zeros(11, dtype=np.int32)
-            declared_mask = np.zeros(11, dtype=np.int32)
+            # 11×11 = 121次元のマスクを初期化（すべて0 = 選択不可）
+            mask = np.zeros(121, dtype=np.int32)
             
             # 密輸側の国の残高を取得
             current_foreign_account = (
                 self.game.foreign1_account if self.game.smuggler.team == 0 
                 else self.game.foreign2_account
-            ) #
+            )
 
-            # ① 実際の密輸額（actual_amount）のマスク計算 (0〜10)
+            # 実際額(act_idx)と申告額(dec_idx)のすべての組み合わせをチェック
             for act_idx in range(11):
                 amount = act_idx * 10 
-                # 国外口座の残高を超えない額なら密輸可能
-                if amount <= current_foreign_account: 
-                    actual_mask[act_idx] = 1
+                
+                # 国外口座の残高を超えない額なら、その実際額は合法
+                if amount <= current_foreign_account:
+                    # 実際額が合法なら、申告額（0〜10）は何を選んでも自由（ルール上制限なし）
+                    for dec_idx in range(11):
+                        # 2次元のインデックスを1次元(0〜120)にフラット化
+                        action_idx = act_idx * 11 + dec_idx
+                        mask[action_idx] = 1
 
-            # ② 申告額（declared_amount）のマスク計算 (0〜10)
-            declared_mask[:] = 1
-
-            # 2つのマスクを結合して22次元の1次元配列にして返す
-            return np.concatenate([actual_mask, declared_mask])
+            return mask
 
         # ----------------------------------------
         # 3. INSPECT（検査）フェーズ: マスクサイズ = 12 (パス1択 + ダウト額11択)
@@ -350,7 +350,7 @@ class BatchsmugglingGame:
             # 意思決定がないフェーズは空のマスクを返す
             return np.array([], dtype=np.int32)
 
-def exact_calculate(self):
+    def exact_calculate(self):
         """
         ゲーム終了時の最終清算ロジック
         """
