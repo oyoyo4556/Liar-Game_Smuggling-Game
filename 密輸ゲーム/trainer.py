@@ -184,7 +184,6 @@ class SmugglingTrainer:
 
         print("\n" + "="*50)
         print(" 🎉 GAME OVER (エピソード終了) 🎉")
-        # ゲーム終了時の最終スコア（各プレイヤーの個人口座残高など）を表示するとさらに面白いです
         print("Final Accounts:")
         for p in state.players:
             print(f"  Player {p.id}: ${p.personal_account} (Team: {p.team})")
