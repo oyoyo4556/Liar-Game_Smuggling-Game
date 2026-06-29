@@ -126,33 +126,35 @@ class BatchsmugglingGame:
         self.game.phase = Phase.SMUGGLE
 
 
-    def step_smuggle(self,actions):
+    def step_smuggle(self, actions):
         """
         密輸フェーズのアクション処理
-        actions: { player_id: (actual_idx, declared_idx) }
-        ※ actual_idx: 0〜10, declared_idx: 0〜10
+        actions: { player_id: action_idx (0〜120) }
         """
         rep_id = self.game.smuggler.representative
 
-        if rep_id in actions:
-            
-            act_idx = actions[rep_id][0]
-            dec_idx = actions[rep_id][1]
-        else:
-            act_idx, dec_idx = 0, 0
+        # 1. 代表者のアクション（121次元のフラットなインデックス）を取得
+        action_idx = actions[rep_id] if rep_id in actions else 0
 
-        # 金額への変換（Numpyの整数型のまま10倍して代入可能）
-        actual_amount = act_idx * 10
-        declared_amount = dec_idx * 10
+        # 2. 121次元のインデックスから、実際額と申告額の各インデックス（0〜10）を復元（デコード）する
+        actual_idx = action_idx // 11
+        declared_idx = action_idx % 11
 
-        # 状態更新
+        # 金額に変換（* 10）
+        actual_amount = int(actual_idx) * 10
+        declared_amount = int(declared_idx) * 10
+
+        # 3. 状態の更新（国外口座からの引き落とし）
         if self.game.smuggler.team == 0:
             self.game.foreign1_account -= actual_amount
         else:
             self.game.foreign2_account -= actual_amount
 
+        # ラウンド情報に金額を記録
         self.game.current.smuggled_amount = actual_amount
         self.game.current.declared_amount = declared_amount
+
+        # 4. 検査（INSPECT）フェーズへ移行
         self.game.phase = Phase.INSPECT
 
 

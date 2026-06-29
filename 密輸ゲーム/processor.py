@@ -51,6 +51,6 @@ class Processor:
         return np.concatenate(obs_components, axis=0)
 
     @staticmethod
-    def observation_tensor(self,game_state, player_id: int) -> torch.Tensor:
-        obs_np = self.observation_numpy(game_state, player_id)
+    def observation_tensor(game_state, player_id: int) -> torch.Tensor:
+        obs_np = Processor.observation_numpy(game_state, player_id)
         return torch.from_numpy(obs_np)

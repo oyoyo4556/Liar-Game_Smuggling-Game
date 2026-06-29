@@ -41,6 +41,8 @@ class VoteQNet(nn.Module):
     def forward(self, x, mask):
         # x: [batch_size, state_dim]
         # mask: [batch_size, action_dim] (1=合法, 0=不合法)
+        # maskが121次元で入ってくるため、本来のアクションサイズ(6)へ
+        mask = mask[:, :6]
         
         x = self.input_layer(x)
         x = F.relu(x)
@@ -107,6 +109,7 @@ class InspectQNet(nn.Module):
         self.advantage = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, x, mask):
+        mask = mask[:, :12]
         
         x = self.input_layer(x)
         x = F.relu(x)

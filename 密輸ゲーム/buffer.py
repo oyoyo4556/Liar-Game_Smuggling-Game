@@ -1,11 +1,6 @@
 import random
 import numpy as np
 import torch
-from .phase import Phase
-
-import random
-import numpy as np
-import torch
 from phase import Phase
 
 class ReplayBuffer:
@@ -22,19 +17,24 @@ class ReplayBuffer:
         """
         すべてのデータを純粋な Numpy 配列、または数値として受け取って保存する。
         """
-        # 自動フェーズなどは弾く
         if phase not in self.buffer:
             return
 
-        # すべて Numpy なので、安全のために .copy() をとって完全に独立したデータとして保存
+        # 後々の不揃いエラーを防ぐため、保存する時点でマスクを最大サイズ「121」にゼロパディングして固定長にする
+        def pad_mask(m):
+            padded = np.zeros(121, dtype=np.float32)
+            if m is not None and len(m) > 0:
+                padded[:len(m)] = m
+            return padded
+
         data = (
             state_np.copy(),
             action_np.copy() if hasattr(action_np, 'copy') else action_np,
             float(reward),
             next_state_np.copy(),
             bool(done),
-            mask_np.copy(),
-            next_mask_np.copy()
+            pad_mask(mask_np),       # 固定長(121)に統一
+            pad_mask(next_mask_np)   # 固定長(121)に統一
         )
 
         if len(self.buffer[phase]) < self.buffer_size:
@@ -47,7 +47,7 @@ class ReplayBuffer:
     def sample_batch(self, phase, batch_size, device="cpu"):
         """
         溜まっていた Numpy データを指定サイズ分ランダム抽出し、
-        学習の直前で【初めて】PyTorch の Tensor に変換して返す。
+        学習の直前で PyTorch の Tensor に変換して返す。
         """
         if len(self.buffer[phase]) < batch_size:
             return None
@@ -55,12 +55,13 @@ class ReplayBuffer:
         batch = random.sample(self.buffer[phase], batch_size)
         states, actions, rewards, next_states, dones, masks, next_masks = zip(*batch)
 
-        # 学習に回すため、ここで一気に Tensor に一括変換（高速です）
         states_tensor = torch.tensor(np.array(states), dtype=torch.float32, device=device)
         actions_tensor = torch.tensor(np.array(actions), dtype=torch.long, device=device)
         rewards_tensor = torch.tensor(np.array(rewards), dtype=torch.float32, device=device)
         next_states_tensor = torch.tensor(np.array(next_states), dtype=torch.float32, device=device)
         dones_tensor = torch.tensor(np.array(dones), dtype=torch.float32, device=device)
+        
+        # すでに固定長になっているため、安全に一括変換可能
         masks_tensor = torch.tensor(np.array(masks), dtype=torch.float32, device=device)
         next_masks_tensor = torch.tensor(np.array(next_masks), dtype=torch.float32, device=device)
 
