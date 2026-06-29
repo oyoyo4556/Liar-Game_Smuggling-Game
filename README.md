@@ -110,6 +110,51 @@ next_q_target = target_inspect_net(next_states, next_masks) # ターゲットネ
 
 自動処理フェーズなどを挟む関係上、`next_masks` に合法手（1）が一つも存在しないバッチ行が発生し、Q値が $-1e9$ に化けてLossが爆発するのを防ぐため、有効な行動がない遷移先に対しては強制的に `next_q = 0.0` とする安全弁が組み込まれています。
 
+## trainのやり方(colabでの例)
+
+```python
+# 1. 各モジュールのインスタンス化
+env = BatchsmugglingGame()
+agent = DQNAgent(24,device="cuda" if torch.cuda.is_available() else "cpu")
+
+trainer = SmugglingTrainer(env, agent,batch_size=64)
+
+save_interval =10000
+filepath = "path"
+
+# Create the directory if it doesn't exist
+os.makedirs(filepath, exist_ok=True)
+agent_load_path = os.path.join(filepath, f"file.pt")
+agent.load(agent_load_path)
+agent.copy_to_weight()
+
+print("start train!")
+
+print_episode = 1000
+p0_reward_history = deque(maxlen=100)
+
+for episode in range(1, 100001):
+
+    episode_rewards = trainer.run_episode(train_player_id=0)
+
+    p0_reward = episode_rewards.get(0, 0.0)
+    p0_reward_history.append(p0_reward)
+
+    if episode % print_episode == 0:
+        avg_p0_reward = np.mean(p0_reward_history) if p0_reward_history else 0.0
+
+        print(f"Episode: {episode} | Total Steps: {trainer.env_steps} | Epsilon: {trainer.agent.epsilon:.3f} | P0 Avg Reward: {avg_p0_reward:.2f}")
+
+        for phase in [Phase.VOTE, Phase.SMUGGLE, Phase.INSPECT]:
+            losses = list(trainer.loss_history[phase])[-10:]
+            avg_loss = np.mean(losses) if losses else 0
+            print(f"  {phase.name} Avg Loss: {avg_loss:.2e} (Buffer: {agent.buffer.get_len(phase)})")
+
+    if episode % save_interval == 0:
+      agent_save_path = os.path.join(filepath, f"dqnv1.0.0_ep{episode}.pt")
+      agent.save(agent_save_path)
+
+```
 
 ## 結果と課題
 
