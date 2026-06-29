@@ -9,16 +9,6 @@ from processor import Processor
 from phase import Phase
 from buffer import ReplayBuffer
 
-import random
-import numpy as np
-import torch
-import torch.nn as nn
-from agent.random_agent import Agent
-from qnet import VoteQNet, SmuggleQNet, InspectQNet
-from processor import Processor
-from phase import Phase
-from buffer import ReplayBuffer
-
 class DQNAgent(Agent):
     def __init__(
       self,
